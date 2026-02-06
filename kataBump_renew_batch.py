@@ -100,6 +100,10 @@ def get_expiry(sb) -> str:
     return sb.get_text("//div[contains(text(),'Expiry')]/following-sibling::div").strip()
 
 
+def renew_open_utc_from_expiry(expiry_str: str) -> datetime:
+    d = datetime.strptime(expiry_str.strip(), "%Y-%m-%d").date()
+    return datetime(d.year, d.month, d.day, tzinfo=timezone.utc) - timedelta(days=1)
+
 
 def should_renew_utc0(expiry_str: str, now_utc: datetime = None) -> bool:
     """
@@ -317,7 +321,16 @@ def main():
 
                 if status == "SKIP":
                     skip += 1
-                    msg = f"ℹ️ Katabump 续期跳过（未到期前一天）\n账号：{safe_email}\nExpiry：{before}"
+                    now_utc = datetime.now(timezone.utc)
+                    open_utc = renew_open_utc_from_expiry(before)
+                    msg = (
+                        "ℹ️ Katabump 续期跳过（按 **UTC 0点** 规则：尚未到可续期开放时间）\n"
+                        f"账号：{safe_email}\n"
+                        f"Expiry：{before}\n"
+                        f"开放时间：{open_utc.strftime('%Y-%m-%d %H:%M')} UTC\n"
+                        f"当前时间：{now_utc.strftime('%Y-%m-%d %H:%M')} UTC"
+                    )
+                   
                 elif status == "OK":
                     ok += 1
                     if after and after != before:
@@ -325,9 +338,9 @@ def main():
                     else:
                         msg = f"✅ Katabump 已提交续期（Expiry 可能稍后更新）\n账号：{safe_email}\nExpiry：{before}"
                 elif status == "OK_NOT_YET":
-                    ok += 1
+                    skip += 1
                     msg = (
-                        "✅ Katabump 监测到『未到续期时间』提示（脚本正常）\n"
+                        "ℹ️ Katabump 续期跳过（站点返回：未到可续期时间；以 UTC 0点 为基准）\n"
                         f"账号：{safe_email}\n"
                         f"Expiry：{before}\n"
                         f"告警：{after}"
